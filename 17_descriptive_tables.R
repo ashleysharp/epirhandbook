@@ -112,6 +112,44 @@ chisq.test(age_by_outcome)
 
 # 17.4 dplyr package ----
 
+## Get counts ----
+
+linelist %>%                 # begin with linelist
+  summarise(n_rows = n())    # return new summary dataframe with column n_rows
+
+linelist %>% 
+  group_by(age_cat) %>%     # group data by unique values in column age_cat
+  summarise(n_rows = n())   # return number of rows *per group*
+
+linelist %>% 
+  count(age_cat)
+
+linelist %>% 
+  count(age_cat, outcome)
+
+## Show all levels ----
+
+linelist %>% 
+  count(age_cat, .drop = FALSE)
+
+## Proportions ----
+
+age_summary <- linelist %>% 
+  count(age_cat) %>%                     # group and count by gender (produces "n" column)
+  mutate(                                # create percent of column - note the denominator
+    percent = scales::percent(n / sum(n))) 
+
+# print
+age_summary
+
+age_by_outcome <- linelist %>%                  # begin with linelist
+  group_by(outcome) %>%                         # group by outcome 
+  count(age_cat) %>%                            # group and count by age_cat, and then remove age_cat grouping
+  mutate(percent = scales::percent(n / sum(n))) # calculate percent - note the denominator is by outcome group
+
+# print
+age_by_outcome
+
 # 17.5 gtsummary package ----
 
 # 17.6 base R ----
