@@ -268,6 +268,3 @@ linelist %>%
     .fns = mean,
     na.rm=T))
 
-
-
-
