@@ -1,0 +1,79 @@
+---
+title: "Epi R Handbook Notes"
+output: html_document
+date: "2024-07-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Management
+
+## Cleaning data and core functions
+
+## Working with dates
+
+## Characters and strings
+
+## Factors
+
+## Pivoting data
+
+## Grouping data
+
+## Joining data
+
+## De-duplication
+
+## Iteration, loops and lists
+
+# Analysis
+
+## Descriptive tables
+
+## Simple statistical tests
+
+## Univariate and multivariable regression
+
+## Missing data
+
+## Standardised rates
+
+## Moving averages
+
+## Time series and outbreak detection
+
+## Epidemic modelling
+
+## Contact tracing
+
+## Survey analysis
+
+## Survival analysis
+
+## GIS basics
+
+# Data visualisation
+
+## Tables for presentation
+
+## ggplot basics
+
+## ggplot tips
+
+## Epidemic curves
+
+## Demographic pyramids and Likert scales
+
+## Heat plots
+
+## Diagrams and charts
+
+## Combinations analysis
+
+## Transmission chains
+
+## Phylogenetic trees
+
+## Interactive plots
