@@ -1,0 +1,246 @@
+---
+title: "Epi R Handbook Notes"
+output: html_document
+date: "2024-07-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Management
+
+## Cleaning data and core functions 0%
+
+## Working with dates 0%
+
+## Characters and strings 0%
+
+## Factors 0%
+
+## Pivoting data 0%
+
+## Grouping data 0%
+
+## Joining data 0%
+
+## De-duplication 0%
+
+## Iteration, loops and lists 0%
+
+# Analysis
+
+## Descriptive tables 0%
+
+## Simple statistical tests 0%
+
+## Univariate and multivariable regression 0%
+
+## Missing data 0%
+
+## Standardised rates 0%
+
+## Moving averages 0%
+
+## Time series and outbreak detection 0%
+
+## Epidemic modelling 0%
+
+## Contact tracing 0%
+
+## Survey analysis 0%
+
+```{r}
+## load packages from CRAN
+pacman::p_load(rio,          # File import
+               here,         # File locator
+               tidyverse,    # data management + ggplot2 graphics
+               tsibble,      # handle time series datasets
+               survey,       # for survey functions
+               srvyr,        # dplyr wrapper for survey package
+               gtsummary,    # wrapper for survey package to produce tables
+               apyramid,     # a package dedicated to creating age pyramids
+               patchwork,    # for combining ggplots
+               ggforce       # for alluvial/sankey plots
+               ) 
+
+## load packages from github
+pacman::p_load_gh(
+     "R4EPI/sitrep"          # for observation time / weighting functions
+)
+```
+
+```{r}
+# import the survey data
+survey_data <- import(here("data", "survey_data.xlsx"))
+
+# import the dictionary into R
+survey_dict <- import(here("data", "survey_dict.xlsx"))
+
+# import the population data
+population <- import(here("data", "population.xlsx"))
+```
+
+```{r}
+## select the date variable names from the dictionary 
+DATEVARS <- survey_dict %>% 
+  filter(type == "date") %>% 
+  filter(name %in% names(survey_data)) %>% 
+  ## filter to match the column names of your data
+  pull(name) # select date vars
+  
+## change to dates 
+survey_data <- survey_data %>%
+  mutate(across(all_of(DATEVARS), as.Date))
+
+
+## add those with only age in months to the year variable (divide by twelve)
+survey_data <- survey_data %>% 
+  mutate(age_years = if_else(is.na(age_years), 
+                             age_months / 12, 
+                             age_years))
+
+## define age group variable
+survey_data <- survey_data %>% 
+     mutate(age_group = age_categories(age_years, 
+                                    breakers = c(0, 3, 15, 30, 45)
+                                    ))
+
+
+## create a character variable based off groups of a different variable 
+survey_data <- survey_data %>% 
+  mutate(health_district = case_when(
+    cluster_number %in% c(1:5) ~ "district_a", 
+    TRUE ~ "district_b"
+  ))
+
+## select the yes/no variable names from the dictionary 
+YNVARS <- survey_dict %>% 
+  filter(type == "yn") %>% 
+  filter(name %in% names(survey_data)) %>% 
+  ## filter to match the column names of your data
+  pull(name) # select yn vars
+  
+## change to dates 
+survey_data <- survey_data %>%
+  mutate(across(all_of(YNVARS), 
+                str_detect, 
+                pattern = "yes"))
+```
+
+```{r}
+# ## join the individual and household data to form a complete data set
+# survey_data <- left_join(survey_data_hh, 
+#                          survey_data_indiv,
+#                          by = c("_index" = "_parent_index"))
+# 
+# 
+# ## create a unique identifier by combining indeces of the two levels 
+# survey_data <- survey_data %>% 
+#      mutate(uid = str_glue("{index}_{index_y}"))
+
+
+#Note: this as already been done in the dataset. Not sure what the indices refer to.
+```
+
+```{r}
+## set the start/end of recall period
+## can be changed to date variables from dataset 
+## (e.g. arrival date & date questionnaire)
+survey_data <- survey_data %>% 
+  mutate(recall_start = as.Date("2018-01-01"), 
+         recall_end = as.Date("2018-05-01"))
+
+
+# set inappropriate dates to NA based on rules 
+## e.g. arrivals before start, departures departures after end
+survey_data <- survey_data %>%
+      mutate(
+           arrived_date = if_else(arrived_date < recall_start, 
+                                 as.Date(NA),
+                                  arrived_date),
+           birthday_date = if_else(birthday_date < recall_start,
+                                  as.Date(NA),
+                                  birthday_date),
+           left_date = if_else(left_date > recall_end,
+                              as.Date(NA),
+                               left_date),
+           death_date = if_else(death_date > recall_end,
+                               as.Date(NA),
+                               death_date)
+           )
+```
+
+```{r}
+## create new variables for start and end dates/causes
+survey_data <- survey_data %>% 
+     ## choose earliest date entered in survey
+     ## from births, household arrivals, and camp arrivals 
+     find_start_date("birthday_date",
+                  "arrived_date",
+                  period_start = "recall_start",
+                  period_end   = "recall_end",
+                  datecol      = "startdate",
+                  datereason   = "startcause" 
+                 ) %>%
+     ## choose earliest date entered in survey
+     ## from camp departures, death and end of the study
+     find_end_date("left_date",
+                "death_date",
+                period_start = "recall_start",
+                period_end   = "recall_end",
+                datecol      = "enddate",
+                datereason   = "endcause" 
+               )
+
+
+## label those that were present at the start/end (except births/deaths)
+survey_data <- survey_data %>% 
+     mutate(
+       ## fill in start date to be the beginning of recall period (for those empty) 
+       startdate = if_else(is.na(startdate), recall_start, startdate), 
+       ## set the start cause to present at start if equal to recall period 
+       ## unless it is equal to the birth date 
+       startcause = if_else(startdate == recall_start & startcause != "birthday_date",
+                              "Present at start", startcause), 
+       ## fill in end date to be end of recall period (for those empty) 
+       enddate = if_else(is.na(enddate), recall_end, enddate), 
+       ## set the end cause to present at end if equall to recall end 
+       ## unless it is equal to the death date
+       endcause = if_else(enddate == recall_end & endcause != "death_date", 
+                            "Present at end", endcause))
+
+
+## Define observation time in days
+survey_data <- survey_data %>% 
+  mutate(obstime = as.numeric(enddate - startdate))
+```
+
+
+## Survival analysis 0%
+
+## GIS basics 0%
+
+# Data visualisation
+
+## Tables for presentation 0%
+
+## ggplot basics 0%
+
+## ggplot tips 0%
+
+## Epidemic curves 0%
+
+## Demographic pyramids and Likert scales 0%
+
+## Heat plots 0%
+
+## Diagrams and charts 0%
+
+## Combinations analysis 0%
+
+## Transmission chains 0%
+
+## Phylogenetic trees 0%
+
+## Interactive plots 0%
